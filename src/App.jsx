@@ -74,7 +74,8 @@ function App() {
         const txnData = {
             ...newCheque,
             amount: parseFloat(newCheque.amount),
-            userId: user.uid
+            userId: user.uid,
+            userEmail: user.email
         };
 
         try {
