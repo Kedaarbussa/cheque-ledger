@@ -44,7 +44,7 @@ function App() {
     }, [user]);
 
     const [showAddForm, setShowAddForm] = useState(false);
-    const [activeTab, setActiveTab] = useState('all'); // 'all', 'deposits', 'cheques'
+    const [activeTab, setActiveTab] = useState('all'); // 'all', 'deposits', 'active-cheques', 'completed-cheques', 'summary'
     const [searchTerm, setSearchTerm] = useState('');
     const [dateFilter, setDateFilter] = useState('all'); // 'all', 'this-month', 'next-month'
     const [editTxnId, setEditTxnId] = useState(null);
@@ -56,7 +56,8 @@ function App() {
         date: new Date().toISOString().split('T')[0],
         chequeNo: '',
         payee: '',
-        amount: ''
+        amount: '',
+        status: 'pending'
     });
 
     const formatCurrency = (amount) => {
@@ -120,7 +121,8 @@ function App() {
             date: new Date().toISOString().split('T')[0],
             chequeNo: '',
             payee: '',
-            amount: ''
+            amount: '',
+            status: 'pending'
         });
         setEditTxnId(null);
         setShowAddForm(false);
@@ -132,10 +134,31 @@ function App() {
             date: txn.date,
             chequeNo: txn.chequeNo || '',
             payee: txn.payee,
-            amount: txn.amount.toString()
+            amount: txn.amount.toString(),
+            status: txn.status || 'pending'
         });
         setEditTxnId(txn.id);
         setShowAddForm(true);
+    };
+
+    const handleToggleStatus = async (txn) => {
+        const newStatus = txn.status === 'cleared' ? 'pending' : 'cleared';
+        try {
+            const resp = await fetch(`/api/transactions`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: txn.id, userId: user.uid, status: newStatus })
+            });
+            if (resp.ok) {
+                setTransactions(transactions.map(t =>
+                    t.id === txn.id ? { ...t, status: newStatus } : t
+                ));
+            } else {
+                console.error("Failed to update status:", resp.statusText);
+            }
+        } catch (error) {
+            console.error("Failed to update status:", error);
+        }
     };
 
     const handleDeleteTransaction = async (id) => {
@@ -308,7 +331,8 @@ function App() {
         return sortableRows.filter(row => {
             // 1. Tab Filtering
             if (activeTab === 'deposits' && row.type !== 'deposit' && row.type !== 'system-deposit') return false;
-            if (activeTab === 'cheques' && row.type !== 'withdrawal') return false;
+            if (activeTab === 'active-cheques' && (row.type !== 'withdrawal' || row.status === 'cleared')) return false;
+            if (activeTab === 'completed-cheques' && (row.type !== 'withdrawal' || row.status !== 'cleared')) return false;
 
             // 2. Search filtering
             if (searchTerm) {
@@ -476,10 +500,16 @@ function App() {
                                 Deposits
                             </button>
                             <button
-                                className={`tab-btn ${activeTab === 'cheques' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('cheques')}
+                                className={`tab-btn ${activeTab === 'active-cheques' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('active-cheques')}
                             >
-                                Cheques
+                                Active
+                            </button>
+                            <button
+                                className={`tab-btn ${activeTab === 'completed-cheques' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('completed-cheques')}
+                            >
+                                Completed
                             </button>
                             <button
                                 className={`tab-btn ${activeTab === 'summary' ? 'active' : ''}`}
@@ -561,13 +591,14 @@ function App() {
                                                 </div>
                                             </th>
                                             <th className="balance-col">Running Balance</th>
+                                            <th>Status</th>
                                             <th className="action-col"></th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {isLoading ? (
                                             <tr>
-                                                <td colSpan="6" className="empty-state" style={{ padding: '3rem' }}>
+                                                <td colSpan="7" className="empty-state" style={{ padding: '3rem' }}>
                                                     Loading transactions from database...
                                                 </td>
                                             </tr>
@@ -581,11 +612,12 @@ function App() {
                                                         <td className="amount-col">-</td>
                                                         <td className="balance-col positive">{formatCurrency(0)}</td> {/* startBalance is 0 now */}
                                                         <td></td>
+                                                        <td></td>
                                                     </tr>
                                                 )}
                                                 {sortedRowOutput.length === 0 && (
                                                     <tr>
-                                                        <td colSpan="6" className="empty-state">No cheques recorded yet. Add one above.</td>
+                                                        <td colSpan="7" className="empty-state">No cheques recorded yet. Add one above.</td>
                                                     </tr>
                                                 )}
                                                 {sortedRowOutput.map((row) => (
@@ -601,6 +633,19 @@ function App() {
                                                         </td>
                                                         <td className={`balance-col ${row.runningBalance > 0 ? 'positive' : row.runningBalance < 0 ? 'negative' : ''}`}>
                                                             {formatCurrency(row.runningBalance)}
+                                                        </td>
+                                                        <td>
+                                                            {row.type === 'withdrawal' && (
+                                                                <div className="status-toggle" onClick={() => handleToggleStatus(row)} style={{display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', width: 'fit-content'}}>
+                                                                    <input type="checkbox" checked={row.status === 'cleared'} readOnly style={{cursor: 'pointer', margin: 0, accentColor: 'var(--success)'}} />
+                                                                    <span className={`badge ${row.status === 'cleared' ? 'badge-success' : 'badge-warning'}`}>
+                                                                        {row.status === 'cleared' ? 'Cleared' : 'Pending'}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                            {(row.type === 'deposit' || row.type === 'system-deposit') && (
+                                                                <span className="badge badge-success">Completed</span>
+                                                            )}
                                                         </td>
                                                         <td className="action-col">
                                                             {row.type !== 'system-deposit' && (

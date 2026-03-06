@@ -659,3 +659,33 @@
         justify-content: center;
     }
 }
+
+/* Badge Styles */
+.badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.badge-success {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success);
+}
+
+.badge-warning {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--warning);
+}
+
+.status-toggle:hover .badge-warning {
+    background: rgba(245, 158, 11, 0.2);
+}
+.status-toggle:hover .badge-success {
+    background: rgba(16, 185, 129, 0.2);
+}
