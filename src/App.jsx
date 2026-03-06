@@ -215,9 +215,8 @@ function App() {
             } else if (txn.type === 'deposit') {
                 deposits += txn.amount;
                 currentBalance += txn.amount;
-                if (isImpactfulToday) {
-                    todayBalance += txn.amount;
-                }
+                // Deposits are immediately available today
+                todayBalance += txn.amount;
             }
 
             // --- Aggregate for chart ---
@@ -240,6 +239,9 @@ function App() {
                 requiredDeposits += depositNeeded;
 
                 if (isImpactfulToday) {
+                    depositsNeededToday += depositNeeded;
+                } else if (chequeDate <= today) {
+                    // Also include in needed today if the cheque is today or past
                     depositsNeededToday += depositNeeded;
                 }
 
