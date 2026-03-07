@@ -239,7 +239,7 @@ function App() {
                 requiredDeposits += depositNeeded;
 
                 // Ensure deposit is on the exact cheque date
-                const chequeDate = new Date(txn.date);
+                const chequeDate = txnDate;
                 const depositDateStr = txn.date;
 
                 if (isImpactfulToday) {
