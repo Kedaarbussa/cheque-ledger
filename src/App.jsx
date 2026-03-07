@@ -238,16 +238,16 @@ function App() {
                 const depositNeeded = Math.abs(currentBalance);
                 requiredDeposits += depositNeeded;
 
+                // Ensure deposit is on the exact cheque date
+                const chequeDate = new Date(txn.date);
+                const depositDateStr = txn.date;
+
                 if (isImpactfulToday) {
                     depositsNeededToday += depositNeeded;
                 } else if (chequeDate <= today) {
                     // Also include in needed today if the cheque is today or past
                     depositsNeededToday += depositNeeded;
                 }
-
-                // Ensure deposit is on the exact cheque date
-                const chequeDate = new Date(txn.date);
-                const depositDateStr = txn.date;
 
                 // Check if this deposit is needed soon (within 3 days)
                 const daysUntilDue = Math.ceil((chequeDate - today) / (1000 * 60 * 60 * 24));
