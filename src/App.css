@@ -209,23 +209,23 @@
 }
 
 .alert-highlight {
-    font-weight: 800;
-    padding: 0.15rem 0.4rem;
-    border-radius: 0.3rem;
+    font-weight: 700;
+    padding: 0.1rem 0.3rem;
+    border-radius: 0.25rem;
     font-size: 1.05em;
     display: inline-block;
 }
 
 .alert-highlight.amount {
-    color: #b91c1c; /* Darker red for emphasis */
-    background-color: rgba(239, 68, 68, 0.15);
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: var(--danger);
+    background-color: rgba(239, 68, 68, 0.05); /* very subtle background */
 }
 
 .alert-highlight.payee {
-    color: var(--primary);
-    background-color: rgba(66, 133, 244, 0.1);
-    border: 1px solid rgba(66, 133, 244, 0.2);
+    color: var(--text-main);
+    background-color: var(--bg); /* barely visible background block */
+    border-bottom: 2px solid rgba(66, 133, 244, 0.3); /* subtle underline */
+    border-radius: 0.15rem;
 }
 
 /* Chart Section */
