@@ -446,7 +446,7 @@ function App() {
                             <ul>
                                 {upcomingNeeds.map((need, idx) => (
                                     <li key={idx}>
-                                        You need to deposit <strong>{formatCurrency(need.amount)}</strong> by <strong>{new Date(need.dueDate).toLocaleDateString('en-IN')}</strong> ({need.daysLeft === 0 ? 'Today' : `${need.daysLeft} days from now`}) for cheque to {need.payee}.
+                                        You need to deposit <span className="alert-highlight amount">{formatCurrency(need.amount)}</span> by <strong>{new Date(need.dueDate).toLocaleDateString('en-IN')}</strong> ({need.daysLeft === 0 ? 'Today' : `${need.daysLeft} days from now`}) for cheque to <span className="alert-highlight payee">{need.payee}</span>.
                                     </li>
                                 ))}
                             </ul>
