@@ -279,8 +279,9 @@ function App() {
             }
         }
 
-        // Calculate Overdue Total from the alerts
+        // Calculate Overdue and Tomorrow Totals directly from the alerts
         const overdueTotal = unpaidAlerts.reduce((sum, alert) => alert.isOverdue ? sum + alert.amount : sum, 0);
+        const tomorrowTotal = unpaidAlerts.reduce((sum, alert) => alert.daysLeft === 1 ? sum + alert.amount : sum, 0);
 
         return {
             ledgerRows: rows,
@@ -290,7 +291,7 @@ function App() {
             finalBalance: mathFinalBalance,
             availableBalanceToday: mathTodayBalance > 0 ? mathTodayBalance : 0,
             requiredDepositsToday: mathTodayBalance < 0 ? Math.abs(mathTodayBalance) : 0,
-            requiredDepositsTomorrow: mathTomorrowBalance < 0 ? Math.abs(mathTomorrowBalance) : 0,
+            requiredDepositsTomorrow: tomorrowTotal,
             overdueDeposits: overdueTotal,
             upcomingNeeds: unpaidAlerts,
             monthlyData: Object.values(monthlyStats)
