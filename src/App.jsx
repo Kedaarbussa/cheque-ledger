@@ -488,17 +488,17 @@ function App() {
                         <div className="stat-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}><Calendar /></div>
                         <div className="stat-info">
                             <h3>Required Deposits (Tomorrow)</h3>
-                            <h2 style={{ color: requiredDepositsTomorrow > 0 ? '#d97706' : 'var(--text-main)' }}>{formatCurrency(requiredDepositsTomorrow)}</h2>
+                            <h2 style={{ color: 'var(--text-main)' }}>{formatCurrency(requiredDepositsTomorrow)}</h2>
                         </div>
                     </div>
 
-                    <div className="stat-card" style={{ '--primary': '#dc2626', background: overdueDeposits > 0 ? 'rgba(220, 38, 38, 0.05)' : 'var(--card-bg)', borderColor: overdueDeposits > 0 ? 'rgba(220, 38, 38, 0.4)' : 'var(--glass-border)' }}>
-                        <div className="stat-icon" style={{ background: overdueDeposits > 0 ? '#fee2e2' : 'var(--bg-hover)', color: overdueDeposits > 0 ? '#dc2626' : 'var(--text-light)' }}>
+                    <div className="stat-card" style={{ '--primary': '#dc2626', background: 'rgba(220, 38, 38, 0.02)', borderColor: 'rgba(220, 38, 38, 0.2)' }}>
+                        <div className="stat-icon" style={{ background: 'rgba(220, 38, 38, 0.1)', color: '#dc2626' }}>
                             <AlertCircle />
                         </div>
                         <div className="stat-info">
                             <h3 style={{ color: overdueDeposits > 0 ? '#dc2626' : 'var(--text-light)' }}>Overdue Deposits</h3>
-                            <h2 style={{ color: overdueDeposits > 0 ? '#b91c1c' : 'var(--text-main)', fontWeight: overdueDeposits > 0 ? '800' : '600' }}>
+                            <h2 style={{ color: overdueDeposits > 0 ? '#dc2626' : 'var(--text-main)', fontWeight: overdueDeposits > 0 ? '800' : '600' }}>
                                 {formatCurrency(overdueDeposits)}
                             </h2>
                         </div>
