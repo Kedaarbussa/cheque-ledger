@@ -207,6 +207,34 @@ function App() {
         const monthlyStats = {}; // To aggregate monthly data
         const rows = [];
 
+        // Pre-calculate strictly mathematical balances (independent of rows)
+        let mathTotalWithdrawals = 0;
+        let mathTotalDeposits = 0;
+        let mathTodayWithdrawals = 0;
+        let mathTodayDeposits = 0;
+
+        sorted.forEach((txn) => {
+            const txnDate = new Date(txn.date);
+            txnDate.setHours(0, 0, 0, 0);
+            const isImpactfulToday = today >= txnDate;
+
+            if (txn.type === 'withdrawal') {
+                mathTotalWithdrawals += txn.amount;
+                if (isImpactfulToday) mathTodayWithdrawals += txn.amount;
+            } else if (txn.type === 'deposit') {
+                mathTotalDeposits += txn.amount;
+                if (isImpactfulToday) mathTodayDeposits += txn.amount; // Use isImpactfulToday for parity
+            }
+        });
+
+        const mathFinalBalance = startBalance + mathTotalDeposits - mathTotalWithdrawals;
+        const mathTodayBalance = startBalance + mathTodayDeposits - mathTodayWithdrawals;
+
+        // Required deposits calculation is strictly the difference if negative
+        let requiredDeposits = mathFinalBalance < 0 ? Math.abs(mathFinalBalance) : 0;
+        let depositsNeededToday = mathTodayBalance < 0 ? Math.abs(mathTodayBalance) : 0;
+
+        // Now process the rows for UI rendering and charts
         sorted.forEach((txn) => {
             const txnDate = new Date(txn.date);
             txnDate.setHours(0, 0, 0, 0);
@@ -241,31 +269,27 @@ function App() {
                 }
             }
 
-            // If balance drops below zero, we need a deposit by the day before this cheque
+            // If balance drops below zero, we need a SYSTEM DEPOSIT row for the UI
             if (currentBalance < 0) {
                 const depositNeeded = Math.abs(currentBalance);
-                requiredDeposits += depositNeeded;
 
                 // Ensure deposit is on the exact cheque date
                 const chequeDate = txnDate;
                 const depositDateStr = txn.date;
 
-                if (isImpactfulToday) {
-                    depositsNeededToday += depositNeeded;
-                } else if (chequeDate <= today) {
-                    // Also include in needed today if the cheque is today or past
-                    depositsNeededToday += depositNeeded;
-                }
-
                 // Check if this deposit is needed soon (within 3 days)
-                const daysUntilDue = Math.ceil((chequeDate - today) / (1000 * 60 * 60 * 24));
-                if (daysUntilDue >= 0 && daysUntilDue <= 3) {
-                    upcomingNeeds.push({
-                        amount: depositNeeded,
-                        dueDate: depositDateStr,
-                        payee: txn.payee,
-                        daysLeft: daysUntilDue
-                    });
+                // Only alert on this if we mathematically STILL need a deposit today
+                // If depositsNeededToday is 0, we don't need a UI alert for this old cheque
+                if (depositsNeededToday > 0) {
+                    const daysUntilDue = Math.ceil((chequeDate - today) / (1000 * 60 * 60 * 24));
+                    if (daysUntilDue >= 0 && daysUntilDue <= 3) {
+                        upcomingNeeds.push({
+                            amount: depositNeeded,
+                            dueDate: depositDateStr,
+                            payee: txn.payee,
+                            daysLeft: daysUntilDue
+                        });
+                    }
                 }
 
                 // Push actual transaction with the negative balance
