@@ -201,8 +201,6 @@ function App() {
         let todayBalance = startBalance;
         let withdrawals = 0;
         let deposits = 0;
-        let requiredDeposits = 0;
-        let depositsNeededToday = 0;
         const upcomingNeeds = []; // Array to store alerts
         const monthlyStats = {}; // To aggregate monthly data
         const rows = [];
@@ -241,6 +239,7 @@ function App() {
 
             // For available balance, we consider transactions where today is ON or AFTER the cheque date.
             const isImpactfulToday = today >= txnDate;
+            const chequeDate = txnDate;
 
             if (txn.type === 'withdrawal') {
                 withdrawals += txn.amount;
@@ -274,7 +273,6 @@ function App() {
                 const depositNeeded = Math.abs(currentBalance);
 
                 // Ensure deposit is on the exact cheque date
-                const chequeDate = txnDate;
                 const depositDateStr = txn.date;
 
                 // Check if this deposit is needed soon (within 3 days)
