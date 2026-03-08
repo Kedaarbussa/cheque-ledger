@@ -183,8 +183,16 @@ function App() {
         // In a real app, startBalance would likely be fetched from the backend as well.
         const startBalance = 0;
 
-        // Sort transactions chronologically
-        const sorted = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+        // Sort transactions chronologically, putting deposits before withdrawals on the same day
+        const sorted = [...transactions].sort((a, b) => {
+            const dateDiff = new Date(a.date) - new Date(b.date);
+            if (dateDiff === 0) {
+                // If they fall on exactly the same date, prioritize deposits to avoid temporary negative balances
+                if (a.type === 'deposit' && b.type === 'withdrawal') return -1;
+                if (a.type === 'withdrawal' && b.type === 'deposit') return 1;
+            }
+            return dateDiff;
+        });
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
