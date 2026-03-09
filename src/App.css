@@ -71,8 +71,9 @@
 /* Dashboard Styles */
 .dashboard {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 1.5rem;
+    margin-bottom: 2rem;
 }
 
 .stat-card {
@@ -688,6 +689,10 @@
     .add-btn {
         width: 100%;
         justify-content: center;
+    }
+
+    .dashboard {
+        grid-template-columns: 1fr;
     }
 }
 

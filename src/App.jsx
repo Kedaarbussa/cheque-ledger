@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { IndianRupee, CreditCard, ArrowRightLeft, Plus, X, Save, AlertCircle, Trash2, Search, Filter, Pencil, ChevronUp, ChevronDown, Bell, LogOut } from 'lucide-react';
+import { AlertCircle, IndianRupee, ArrowRightLeft, Plus, Edit2, Trash2, Calendar, CheckCircle2, Search, Filter, Pencil, ChevronDown, ChevronUp, Bell, LogOut, Download } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth, googleProvider } from './firebase';
@@ -178,7 +178,7 @@ function App() {
         }
     };
 
-    const { ledgerRows, totalWithdrawals, totalDeposits, totalRequiredDeposits, finalBalance, availableBalanceToday, requiredDepositsToday, upcomingNeeds, monthlyData } = useMemo(() => {
+    const { ledgerRows, totalWithdrawals, totalDeposits, totalRequiredDeposits, finalBalance, availableBalanceToday, requiredDepositsToday, requiredDepositsTomorrow, overdueDeposits, upcomingNeeds, monthlyData } = useMemo(() => {
         const startBalance = 0;
 
         // Sort transactions chronologically, putting deposits before withdrawals on the same day
@@ -199,6 +199,8 @@ function App() {
         let mathTotalDeposits = 0;
         let mathTodayWithdrawals = 0;
         let mathTodayDeposits = 0;
+        let mathTomorrowWithdrawals = 0;
+        let mathTomorrowDeposits = 0;
         
         const monthlyStats = {};
         const rows = [];
@@ -208,16 +210,23 @@ function App() {
         sorted.forEach((txn) => {
             const txnDate = new Date(txn.date);
             txnDate.setHours(0, 0, 0, 0);
+            
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
             const isImpactfulToday = today >= txnDate;
+            const isImpactfulTomorrow = tomorrow >= txnDate;
 
             if (txn.type === 'withdrawal') {
                 mathTotalWithdrawals += txn.amount;
                 runningBalance -= txn.amount;
                 if (isImpactfulToday) mathTodayWithdrawals += txn.amount;
+                if (isImpactfulTomorrow) mathTomorrowWithdrawals += txn.amount;
             } else if (txn.type === 'deposit') {
                 mathTotalDeposits += txn.amount;
                 runningBalance += txn.amount;
                 if (isImpactfulToday) mathTodayDeposits += txn.amount;
+                if (isImpactfulTomorrow) mathTomorrowDeposits += txn.amount;
             }
 
             rows.push({
@@ -241,6 +250,7 @@ function App() {
 
         const mathFinalBalance = startBalance + mathTotalDeposits - mathTotalWithdrawals;
         const mathTodayBalance = startBalance + mathTodayDeposits - mathTodayWithdrawals;
+        const mathTomorrowBalance = startBalance + mathTomorrowDeposits - mathTomorrowWithdrawals;
 
         // Pass 2: FIFO Unpaid Cheques Calculation for Alerts
         let remainingShortfall = mathFinalBalance < 0 ? Math.abs(mathFinalBalance) : 0;
@@ -269,6 +279,9 @@ function App() {
             }
         }
 
+        // Calculate Overdue Total from the alerts
+        const overdueTotal = unpaidAlerts.reduce((sum, alert) => alert.isOverdue ? sum + alert.amount : sum, 0);
+
         return {
             ledgerRows: rows,
             totalWithdrawals: mathTotalWithdrawals,
@@ -277,6 +290,8 @@ function App() {
             finalBalance: mathFinalBalance,
             availableBalanceToday: mathTodayBalance > 0 ? mathTodayBalance : 0,
             requiredDepositsToday: mathTodayBalance < 0 ? Math.abs(mathTodayBalance) : 0,
+            requiredDepositsTomorrow: mathTomorrowBalance < 0 ? Math.abs(mathTomorrowBalance) : 0,
+            overdueDeposits: overdueTotal,
             upcomingNeeds: unpaidAlerts,
             monthlyData: Object.values(monthlyStats)
         };
@@ -465,6 +480,26 @@ function App() {
                         <div className="stat-info">
                             <h3>Required Deposits (By Today)</h3>
                             <h2>{formatCurrency(requiredDepositsToday)}</h2>
+                        </div>
+                    </div>
+
+                    <div className="stat-card" style={{ '--primary': '#f59e0b', background: 'rgba(245, 158, 11, 0.02)', borderColor: 'rgba(245, 158, 11, 0.2)' }}>
+                        <div className="stat-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}><Calendar /></div>
+                        <div className="stat-info">
+                            <h3>Required Deposits (Tomorrow)</h3>
+                            <h2 style={{ color: requiredDepositsTomorrow > 0 ? '#d97706' : 'var(--text-main)' }}>{formatCurrency(requiredDepositsTomorrow)}</h2>
+                        </div>
+                    </div>
+
+                    <div className="stat-card" style={{ '--primary': '#dc2626', background: overdueDeposits > 0 ? 'rgba(220, 38, 38, 0.05)' : 'var(--card-bg)', borderColor: overdueDeposits > 0 ? 'rgba(220, 38, 38, 0.4)' : 'var(--glass-border)' }}>
+                        <div className="stat-icon" style={{ background: overdueDeposits > 0 ? '#fee2e2' : 'var(--bg-hover)', color: overdueDeposits > 0 ? '#dc2626' : 'var(--text-light)' }}>
+                            <AlertCircle />
+                        </div>
+                        <div className="stat-info">
+                            <h3 style={{ color: overdueDeposits > 0 ? '#dc2626' : 'var(--text-light)' }}>Overdue Deposits</h3>
+                            <h2 style={{ color: overdueDeposits > 0 ? '#b91c1c' : 'var(--text-main)', fontWeight: overdueDeposits > 0 ? '800' : '600' }}>
+                                {formatCurrency(overdueDeposits)}
+                            </h2>
                         </div>
                     </div>
                 </section>
