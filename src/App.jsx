@@ -203,9 +203,8 @@ function App() {
             const txnDate = new Date(txn.date);
             txnDate.setHours(0, 0, 0, 0);
 
-            // For available balance, we only consider transactions where today is strictly after the day BEFORE the cheque date.
-            // i.e., impact is only felt ON or AFTER (cheque date - 1 day).
-            const isImpactfulToday = new Date(today.getTime() + (24 * 60 * 60 * 1000)) >= txnDate;
+            // For available balance, we consider transactions where today is ON or AFTER the cheque date.
+            const isImpactfulToday = today >= txnDate;
 
             if (txn.type === 'withdrawal') {
                 withdrawals += txn.amount;
@@ -235,11 +234,6 @@ function App() {
                 }
             }
 
-            rows.push({
-                ...txn,
-                runningBalance: currentBalance
-            });
-
             // If balance drops below zero, we need a deposit by the day before this cheque
             if (currentBalance < 0) {
                 const depositNeeded = Math.abs(currentBalance);
@@ -249,10 +243,9 @@ function App() {
                     depositsNeededToday += depositNeeded;
                 }
 
-                // Calculate day before
+                // Ensure deposit is on the exact cheque date
                 const chequeDate = new Date(txn.date);
-                chequeDate.setDate(chequeDate.getDate() - 1);
-                const depositDateStr = chequeDate.toISOString().split('T')[0];
+                const depositDateStr = txn.date;
 
                 // Check if this deposit is needed soon (within 3 days)
                 const daysUntilDue = Math.ceil((chequeDate - today) / (1000 * 60 * 60 * 24));
@@ -265,6 +258,13 @@ function App() {
                     });
                 }
 
+                // Push actual transaction with the negative balance
+                rows.push({
+                    ...txn,
+                    runningBalance: currentBalance
+                });
+
+                // Push deposit transaction explicitly returning runningBalance to 0
                 rows.push({
                     id: `deposit-${txn.id}`,
                     date: depositDateStr,
@@ -280,6 +280,12 @@ function App() {
                 if (isImpactfulToday) {
                     todayBalance = 0;
                 }
+            } else {
+                // If it doesn't trigger a required deposit, just push the transaction normally
+                rows.push({
+                    ...txn,
+                    runningBalance: currentBalance
+                });
             }
         });
 
