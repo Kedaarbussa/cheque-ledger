@@ -221,6 +221,17 @@
     background-color: rgba(239, 68, 68, 0.05); /* very subtle background */
 }
 
+.alert-highlight.overdue {
+    color: white;
+    background-color: var(--danger);
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.3rem;
+    font-weight: 800;
+    margin-right: 0.5rem;
+    font-size: 0.9em;
+    letter-spacing: 0.5px;
+}
+
 .alert-highlight.payee {
     color: var(--text-main);
     background-color: var(--bg); /* barely visible background block */
