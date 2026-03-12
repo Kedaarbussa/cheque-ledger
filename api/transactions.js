@@ -38,6 +38,8 @@ export default async function handler(req, res) {
                 const newTxn = req.body;
                 // Remove frontend ID if present, let Mongo create _id
                 if (newTxn.id) delete newTxn.id;
+                
+                newTxn.createdAt = new Date().toISOString();
 
                 const result = await collection.insertOne(newTxn);
                 res.status(201).json({ ...newTxn, id: result.insertedId.toString() });

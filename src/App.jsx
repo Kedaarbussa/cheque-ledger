@@ -49,6 +49,18 @@ function App() {
     const [dateFilter, setDateFilter] = useState('all'); // 'all', 'this-month', 'next-month'
     const [editTxnId, setEditTxnId] = useState(null);
     const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'asc' });
+    const [expandedAlertDates, setExpandedAlertDates] = useState({});
+    
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 20;
+
+    const toggleAlertDate = (dateKey) => {
+        setExpandedAlertDates(prev => ({
+            ...prev,
+            [dateKey]: !prev[dateKey]
+        }));
+    };
 
     // Form State
     const [newCheque, setNewCheque] = useState({
@@ -103,7 +115,7 @@ function App() {
                 });
                 if (resp.ok) {
                     const savedTxn = await resp.json();
-                    setTransactions([...transactions, savedTxn]);
+                    setTransactions(prev => [...prev, savedTxn]);
                 } else {
                     console.error("Failed to add transaction:", resp.statusText);
                 }
@@ -178,7 +190,7 @@ function App() {
         }
     };
 
-    const { ledgerRows, totalWithdrawals, totalDeposits, totalRequiredDeposits, finalBalance, availableBalanceToday, requiredDepositsToday, requiredDepositsTomorrow, overdueDeposits, upcomingNeeds, monthlyData } = useMemo(() => {
+    const { ledgerRows, totalWithdrawals, totalDeposits, totalRequiredDeposits, finalBalance, clearedAccountBalance, availableBalanceToday, requiredDepositsToday, requiredDepositsTomorrow, overdueDeposits, upcomingNeeds, monthlyData } = useMemo(() => {
         const startBalance = 0;
 
         // Sort transactions chronologically, putting deposits before withdrawals on the same day
@@ -186,8 +198,8 @@ function App() {
             const dateDiff = new Date(a.date) - new Date(b.date);
             if (dateDiff === 0) {
                 // If they fall on exactly the same date, prioritize deposits to avoid temporary negative balances
-                if (a.type === 'deposit' && b.type === 'withdrawal') return -1;
-                if (a.type === 'withdrawal' && b.type === 'deposit') return 1;
+                if ((a.type === 'deposit' || a.type === 'system-deposit') && b.type === 'withdrawal') return -1;
+                if (a.type === 'withdrawal' && (b.type === 'deposit' || b.type === 'system-deposit')) return 1;
             }
             return dateDiff;
         });
@@ -201,6 +213,8 @@ function App() {
         let mathTodayDeposits = 0;
         let mathTomorrowWithdrawals = 0;
         let mathTomorrowDeposits = 0;
+        
+        let mathClearedBalance = startBalance;
         
         const monthlyStats = {};
         const rows = [];
@@ -222,11 +236,17 @@ function App() {
                 runningBalance -= txn.amount;
                 if (isImpactfulToday) mathTodayWithdrawals += txn.amount;
                 if (isImpactfulTomorrow) mathTomorrowWithdrawals += txn.amount;
-            } else if (txn.type === 'deposit') {
+                
+                if (txn.status === 'cleared') {
+                    mathClearedBalance -= txn.amount;
+                }
+            } else if (txn.type === 'deposit' || txn.type === 'system-deposit') {
                 mathTotalDeposits += txn.amount;
                 runningBalance += txn.amount;
                 if (isImpactfulToday) mathTodayDeposits += txn.amount;
                 if (isImpactfulTomorrow) mathTomorrowDeposits += txn.amount;
+                
+                mathClearedBalance += txn.amount;
             }
 
             rows.push({
@@ -283,17 +303,41 @@ function App() {
         const overdueTotal = unpaidAlerts.reduce((sum, alert) => alert.isOverdue ? sum + alert.amount : sum, 0);
         const tomorrowTotal = unpaidAlerts.reduce((sum, alert) => alert.daysLeft === 1 ? sum + alert.amount : sum, 0);
 
+        // Group Unpaid Alerts by Date
+        const groupedAlerts = {};
+        unpaidAlerts.forEach(alert => {
+            if (!groupedAlerts[alert.dueDate]) {
+                groupedAlerts[alert.dueDate] = {
+                    date: alert.dueDate,
+                    totalAmount: 0,
+                    daysLeft: alert.daysLeft,
+                    isOverdue: alert.isOverdue,
+                    cheques: []
+                };
+            }
+            groupedAlerts[alert.dueDate].totalAmount += alert.amount;
+            groupedAlerts[alert.dueDate].cheques.push(alert);
+        });
+
+        // Sort inside groups by largest amount first
+        Object.values(groupedAlerts).forEach(group => {
+            group.cheques.sort((a,b) => b.amount - a.amount);
+        });
+
+        const sortedGroupedAlerts = Object.values(groupedAlerts).sort((a,b) => new Date(a.date) - new Date(b.date));
+
         return {
             ledgerRows: rows,
             totalWithdrawals: mathTotalWithdrawals,
             totalDeposits: mathTotalDeposits,
             totalRequiredDeposits: mathFinalBalance < 0 ? Math.abs(mathFinalBalance) : 0,
             finalBalance: mathFinalBalance,
+            clearedAccountBalance: mathClearedBalance,
             availableBalanceToday: mathTodayBalance > 0 ? mathTodayBalance : 0,
             requiredDepositsToday: mathTodayBalance < 0 ? Math.abs(mathTodayBalance) : 0,
             requiredDepositsTomorrow: tomorrowTotal,
             overdueDeposits: overdueTotal,
-            upcomingNeeds: unpaidAlerts,
+            upcomingNeeds: sortedGroupedAlerts,
             monthlyData: Object.values(monthlyStats)
         };
     }, [transactions]);
@@ -341,7 +385,8 @@ function App() {
                 const lowerSearch = searchTerm.toLowerCase();
                 const matchPayee = row.payee.toLowerCase().includes(lowerSearch);
                 const matchCheque = (row.chequeNo || '').toLowerCase().includes(lowerSearch);
-                if (!matchPayee && !matchCheque) return false;
+                const matchEntryDate = row.createdAt ? new Date(row.createdAt).toLocaleDateString('en-IN').includes(lowerSearch) : false;
+                if (!matchPayee && !matchCheque && !matchEntryDate) return false;
             }
 
             // 3. Date Filtering
@@ -360,6 +405,17 @@ function App() {
             return true;
         });
     }, [ledgerRows, sortConfig, activeTab, searchTerm, dateFilter]);
+
+    // Calculate Pagination Slice
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = sortedRowOutput.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(sortedRowOutput.length / itemsPerPage);
+
+    // Reset pagination when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeTab, searchTerm, dateFilter, sortConfig]);
 
     if (isAuthLoading) {
         return (
@@ -435,15 +491,40 @@ function App() {
                         <div className="alert-icon-container">
                             <Bell size={24} className="alert-bell-icon" />
                         </div>
-                        <div className="alert-content">
+                        <div className="alert-content" style={{ width: '100%' }}>
                             <h3>Upcoming Funding Required!</h3>
-                            <ul>
-                                {upcomingNeeds.map((need, idx) => (
-                                    <li key={idx}>
-                                        {need.isOverdue && <span className="alert-highlight overdue">OVERDUE •</span>}
-                                        You need to deposit <span className="alert-highlight amount">{formatCurrency(need.amount)}</span> by <strong>{new Date(need.dueDate).toLocaleDateString('en-IN')}</strong> ({need.daysLeft === 0 ? 'Today' : need.daysLeft < 0 ? `${Math.abs(need.daysLeft)} days ago` : `${need.daysLeft} days from now`}) for cheque to <span className="alert-highlight payee">{need.payee}</span>.
-                                    </li>
-                                ))}
+                            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {upcomingNeeds.map((group, idx) => {
+                                    const isExpanded = expandedAlertDates[group.date];
+                                    return (
+                                        <li key={idx} style={{ background: 'rgba(255,255,255,0.5)', padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.05)' }}>
+                                            <div 
+                                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+                                                onClick={() => toggleAlertDate(group.date)}
+                                            >
+                                                <div>
+                                                    {group.isOverdue && <span className="alert-highlight overdue">OVERDUE • </span>}
+                                                    You need to deposit a total of <span className="alert-highlight amount" style={{ fontSize: '1.1em' }}>{formatCurrency(group.totalAmount)}</span> by <strong>{new Date(group.date).toLocaleDateString('en-IN')}</strong> ({group.daysLeft === 0 ? 'Today' : group.daysLeft < 0 ? `${Math.abs(group.daysLeft)} days ago` : `${group.daysLeft} days from now`}).
+                                                </div>
+                                                <div style={{ color: 'var(--text-light)', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85em' }}>
+                                                    {group.cheques.length} cheques {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                                </div>
+                                            </div>
+                                            
+                                            {isExpanded && (
+                                                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(0,0,0,0.05)', marginLeft: '10px' }}>
+                                                    <ul style={{ listStyleType: 'disc', paddingLeft: '20px', color: 'var(--text)' }}>
+                                                        {group.cheques.map((cheque, cIdx) => (
+                                                            <li key={cIdx} style={{ marginBottom: '6px' }}>
+                                                                <span className="alert-highlight payee">{cheque.payee}</span> - <span className="alert-highlight amount" style={{ padding: '0 4px', background: 'transparent' }}>{formatCurrency(cheque.amount)}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                        </li>
+                                    );
+                                })}
                             </ul>
                         </div>
                     </div>
@@ -457,6 +538,17 @@ function App() {
                             <h2 className={availableBalanceToday < 0 ? 'negative' : 'positive'}>
                                 {formatCurrency(availableBalanceToday)}
                             </h2>
+                        </div>
+                    </div>
+
+                    <div className="stat-card primary" style={{ '--primary': '#4285F4' }}>
+                        <div className="stat-icon" style={{ background: 'rgba(66, 133, 244, 0.1)', color: '#4285F4' }}><IndianRupee /></div>
+                        <div className="stat-info">
+                            <h3>Whole Account Balance</h3>
+                            <h2 className={clearedAccountBalance < 0 ? 'negative' : 'positive'} style={{ color: '#4285F4' }}>
+                                {formatCurrency(clearedAccountBalance)}
+                            </h2>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-light)', marginTop: '4px' }}>Only cleared cheques</div>
                         </div>
                     </div>
 
@@ -603,9 +695,11 @@ function App() {
                                 <table className="ledger-table">
                                     <thead>
                                         <tr>
+                                            <th>S.No.</th>
                                             <th className="sortable-header" onClick={() => handleSort('date')}>
                                                 Date {getSortIcon('date')}
                                             </th>
+                                            <th>Entry Date</th>
                                             <th>Cheque No</th>
                                             <th>Payee</th>
                                             <th className="amount-col sortable-header" onClick={() => handleSort('amount')}>
@@ -621,7 +715,7 @@ function App() {
                                     <tbody>
                                         {isLoading ? (
                                             <tr>
-                                                <td colSpan="7" className="empty-state" style={{ padding: '3rem' }}>
+                                                <td colSpan="9" className="empty-state" style={{ padding: '3rem' }}>
                                                     Loading transactions from database...
                                                 </td>
                                             </tr>
@@ -631,6 +725,8 @@ function App() {
                                                     <tr className="initial-row">
                                                         <td>-</td>
                                                         <td>-</td>
+                                                        <td>-</td>
+                                                        <td>-</td>
                                                         <td>Initial Balance</td>
                                                         <td className="amount-col">-</td>
                                                         <td className="balance-col positive">{formatCurrency(0)}</td> {/* startBalance is 0 now */}
@@ -638,14 +734,16 @@ function App() {
                                                         <td></td>
                                                     </tr>
                                                 )}
-                                                {sortedRowOutput.length === 0 && (
+                                                {currentItems.length === 0 && (
                                                     <tr>
-                                                        <td colSpan="7" className="empty-state">No cheques recorded yet. Add one above.</td>
+                                                        <td colSpan="9" className="empty-state">No cheques available for this view.</td>
                                                     </tr>
                                                 )}
-                                                {sortedRowOutput.map((row) => (
+                                                {currentItems.map((row, index) => (
                                                     <tr key={row.id} className={row.type === 'deposit' ? 'deposit-row' : ''}>
+                                                        <td style={{ color: 'var(--text-light)', fontSize: '0.85em' }}>{indexOfFirstItem + index + 1}</td>
                                                         <td>{new Date(row.date).toLocaleDateString('en-IN')}</td>
+                                                        <td style={{ color: 'var(--text-light)', fontSize: '0.9em' }}>{row.createdAt ? new Date(row.createdAt).toLocaleDateString('en-IN') : '-'}</td>
                                                         <td>{row.chequeNo || '-'}</td>
                                                         <td className={row.type === 'system-deposit' ? 'payee-col' : ''}>
                                                             {row.type === 'system-deposit' && <AlertCircle size={16} />}
@@ -697,6 +795,31 @@ function App() {
                                     </tbody>
                                 </table>
                             </div>
+                            
+                            {/* Pagination Controls */}
+                            {sortedRowOutput.length > 0 && !isLoading && activeTab !== 'summary' && (
+                                <div className="pagination-controls" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: '#fff', borderTop: '1px solid #E2E8F0', borderBottomLeftRadius: '1rem', borderBottomRightRadius: '1rem' }}>
+                                    <div style={{ color: 'var(--text-light)', fontSize: '0.9rem' }}>
+                                        Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, sortedRowOutput.length)} of {sortedRowOutput.length} entries
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <button 
+                                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
+                                            disabled={currentPage === 1}
+                                            style={{ padding: '0.5rem 1rem', border: '1px solid #E2E8F0', borderRadius: '0.5rem', background: currentPage === 1 ? '#f8fafc' : '#fff', color: currentPage === 1 ? '#94a3b8' : 'var(--text)', cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                                        >
+                                            Previous
+                                        </button>
+                                        <button 
+                                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
+                                            disabled={currentPage === totalPages || totalPages === 0}
+                                            style={{ padding: '0.5rem 1rem', border: '1px solid #E2E8F0', borderRadius: '0.5rem', background: currentPage === totalPages || totalPages === 0 ? '#f8fafc' : '#fff', color: currentPage === totalPages || totalPages === 0 ? '#94a3b8' : 'var(--text)', cursor: currentPage === totalPages || totalPages === 0 ? 'not-allowed' : 'pointer' }}
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </>
                     )}
                 </section>
