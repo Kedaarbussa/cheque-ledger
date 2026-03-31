@@ -62,10 +62,19 @@ function App() {
         }));
     };
 
+    // Helper to get local date string (YYYY-MM-DD)
+    const getLocalDateString = () => {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
     // Form State
     const [newCheque, setNewCheque] = useState({
         type: 'withdrawal',
-        date: new Date().toISOString().split('T')[0],
+        date: getLocalDateString(),
         chequeNo: '',
         payee: '',
         amount: '',
@@ -130,7 +139,7 @@ function App() {
     const closeForm = () => {
         setNewCheque({
             type: 'withdrawal',
-            date: new Date().toISOString().split('T')[0],
+            date: getLocalDateString(),
             chequeNo: '',
             payee: '',
             amount: '',
@@ -155,15 +164,18 @@ function App() {
 
     const handleToggleStatus = async (txn) => {
         const newStatus = txn.status === 'cleared' ? 'pending' : 'cleared';
+        // Add clearedAt timestamp logic
+        const clearedAt = newStatus === 'cleared' ? new Date().toISOString() : null;
         try {
             const resp = await fetch(`/api/transactions`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: txn.id, userId: user.uid, status: newStatus })
+                // Include clearedAt in DB update
+                body: JSON.stringify({ id: txn.id, userId: user.uid, status: newStatus, clearedAt }) 
             });
             if (resp.ok) {
                 setTransactions(transactions.map(t =>
-                    t.id === txn.id ? { ...t, status: newStatus } : t
+                    t.id === txn.id ? { ...t, status: newStatus, clearedAt } : t
                 ));
             } else {
                 console.error("Failed to update status:", resp.statusText);
@@ -375,7 +387,14 @@ function App() {
 
         // Apply filters
         return sortableRows.filter(row => {
+            // Determine if row is safely archived (cleared > 30 days ago)
+            const isArchived = row.type === 'withdrawal' && row.status === 'cleared' && row.clearedAt && (new Date() - new Date(row.clearedAt)) > 1000 * 60 * 60 * 24 * 30;
+
             // 1. Tab Filtering
+            if (activeTab === 'archived' && !isArchived) return false;
+            // Hide archived items from all other standard ledger views
+            if (activeTab !== 'archived' && activeTab !== 'summary' && isArchived) return false;
+
             if (activeTab === 'deposits' && row.type !== 'deposit' && row.type !== 'system-deposit') return false;
             if (activeTab === 'active-cheques' && (row.type !== 'withdrawal' || row.status === 'cleared')) return false;
             if (activeTab === 'completed-cheques' && (row.type !== 'withdrawal' || row.status !== 'cleared')) return false;
@@ -625,6 +644,12 @@ function App() {
                                 onClick={() => setActiveTab('completed-cheques')}
                             >
                                 Completed
+                            </button>
+                            <button
+                                className={`tab-btn ${activeTab === 'archived' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('archived')}
+                            >
+                                Archived
                             </button>
                             <button
                                 className={`tab-btn ${activeTab === 'summary' ? 'active' : ''}`}
